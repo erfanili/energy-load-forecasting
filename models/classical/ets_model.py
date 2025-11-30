@@ -1,8 +1,13 @@
-#ets_model.py
+#models/classical/ets_model.py
 import pandas as pd
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import joblib
 from pathlib import Path
+
+
+
+
+
 def fit_ets_model(df, region, seasonal_periods):
     
     df_region = df[df["region"]== region].copy()
@@ -35,37 +40,57 @@ def fit_ets_model(df, region, seasonal_periods):
     return fitted_model
 
 
+def get_full_forecast_df(fitted_model, horizon):
+    """
+    Returns one DataFrame containing:
+      - timestamp
+      - region
+      - actual (historical actual load)
+      - fitted (in-sample fitted values)
+      - y_hat (future forecast)
+    """
+    # 1️⃣ Historical data
+    y_actual = fitted_model.model.endog
+    y_fitted = fitted_model.fittedvalues
+    timestamps = pd.to_datetime(fitted_model.model.data.row_labels)
+    # breakpoint()
+    region = getattr(fitted_model, "region", "unknown_region")
 
-def forecast_ets_model(model, horizon):
-    y_hat = model.forecast(horizon)
-    
-    region = getattr(model, "region", None)
-    if region is None:
-        
-        region = "unknown_region"
-        
-    last_timestamp = model.model.data.row_labels[-1]
-    if not isinstance(last_timestamp, pd.Timestamp):
-        last_timestamp = pd.to_datetime(last_timestamp)
-        
+    df_hist = pd.DataFrame({
+        "timestamp": timestamps,
+        "region": region,
+        "actual": y_actual,
+        "y_hat": y_fitted  # future forecast not here
+    })
+
+    # 2️⃣ Future forecast
+    y_future = fitted_model.forecast(horizon)
+
+    last_timestamp = timestamps[-1]
     future_timestamps = pd.date_range(
-        start= last_timestamp + pd.Timedelta(hours=1),
-        periods = horizon,
-        freq='h'        
+        start=last_timestamp + pd.Timedelta(hours=1),
+        periods=horizon,
+        freq="h"
     )
-    
-    df_fcst = pd.DataFrame({
+
+    df_future = pd.DataFrame({
         "timestamp": future_timestamps,
         "region": region,
-        "y_hat": y_hat.values
+        "actual": [None] * horizon,  # no actual future data
+        "y_hat": y_future.values
     })
-    
-    return df_fcst
+
+    # 3️⃣ Merge historical + future
+    df_full = pd.concat([df_hist, df_future], ignore_index=True)
+    # breakpoint()
+    return df_full
+
 
 
 def train_and_forecast_ets(df, region, seasonal_periods, horizon):
     fitted_model  = fit_ets_model(df=df, region=region, seasonal_periods=seasonal_periods)
-    fcst_df = forecast_ets_model(fitted_model, horizon)
+    fcst_df = get_full_forecast_df(fitted_model, horizon)
+
     return fcst_df
 
 

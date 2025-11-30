@@ -1,3 +1,4 @@
+#feature_engineering/feature_pipeline.py
 from dataclasses import dataclass
 import pandas as pd
 from typing import List
@@ -13,7 +14,7 @@ class FeatureConfig:
     lags: List[int]
     rolling_windows: List[int]
     use_boxcox: bool=True
-    use_stl: bool = True
+    use_stl: bool = False
     
 
 def build_features(df, config):
